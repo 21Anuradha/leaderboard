@@ -16,17 +16,25 @@ A modular real-time leaderboard system for a mobile gaming platform. Two indepen
 
 ## Module Responsibilities
 
-### Module 1 — `ScoreGeneratorModule` (`data/`)
+The project uses **three Gradle modules** with clear boundaries:
+
+| Module | Type | Responsibility |
+|--------|------|----------------|
+| `:score-engine` | Kotlin JVM library | Module 1 — score generation (`ScoreGeneratorModule`, `Player`, `ScoreUpdate`) |
+| `:leaderboard-core` | Kotlin JVM library | Module 2 — ranking + state (`LeaderboardModule`, `RankingEngine`, `RankedPlayer`) |
+| `:app` | Android application | UI layer only (`LeaderboardScreen`, `LeaderboardViewModel`, Hilt wiring) |
+
+### Module 1 — `:score-engine` (`ScoreGeneratorModule`)
 
 Simulates a game backend / match engine.
 
-- Maintains a fixed roster of 8 players
+- Maintains a fixed roster of 20 players
 - Emits `Flow<ScoreUpdate>` at random intervals (500–2000ms)
 - Picks random players and adds random positive score deltas (10–300)
 - Uses a seeded `Random` for deterministic sessions (reproducible for debugging)
 - **UI-agnostic**, no Android dependencies beyond coroutines
 
-### Module 2 — `LeaderboardModule` + `RankingEngine` (`domain/`)
+### Module 2 — `:leaderboard-core` (`LeaderboardModule` + `RankingEngine`)
 
 Consumes score events and owns leaderboard state.
 
@@ -34,7 +42,7 @@ Consumes score events and owns leaderboard state.
 - `RankingEngine`: pure ranking logic (sort DESC, competition ranking, rank-change metadata)
 - Does **not** generate scores
 
-### Presentation (`presentation/`)
+### Presentation — `:app` (`presentation/`)
 
 - `LeaderboardViewModel`: thin bridge — starts the module, exposes state with lifecycle-aware `stateIn`
 - `LeaderboardScreen`: Compose UI with rank, username, live score, and animations
@@ -43,17 +51,17 @@ Consumes score events and owns leaderboard state.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  UI Layer (Compose)                                     │
+│  :app — UI Layer (Compose)                              │
 │  LeaderboardScreen → LeaderboardViewModel               │
 └──────────────────────────┬──────────────────────────────┘
                            │ StateFlow
 ┌──────────────────────────▼──────────────────────────────┐
-│  Domain Layer                                           │
+│  :leaderboard-core — Domain Layer                       │
 │  LeaderboardModule ──► RankingEngine                    │
 └──────────────────────────┬──────────────────────────────┘
                            │ Flow<ScoreUpdate>
 ┌──────────────────────────▼──────────────────────────────┐
-│  Data / Engine Layer                                    │
+│  :score-engine — Data / Engine Layer                    │
 │  ScoreGeneratorModule                                   │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -121,9 +129,9 @@ Consumes score events and owns leaderboard state.
 | Decision | Trade-off |
 |----------|-----------|
 | Singleton `LeaderboardModule` | Survives rotation but holds memory for app lifetime. Production: scope to `MatchComponent`. |
-| Full re-sort on each update | Simple and correct for 8 players; doesn't scale to 100K without redesign. |
+| In-process Gradle modules | `:score-engine` and `:leaderboard-core` are JVM libraries with zero Android UI deps; `:app` is the only Android module. |
+| Full re-sort on each update | Simple and correct for 20 players; doesn't scale to 100K without redesign. |
 | Animation state in domain model (`isRecentlyUpdated`) | Couples presentation hint to domain; acceptable for assignment, would use UI-side diffing in production. |
-| In-process modules | Clean separation without multi-module Gradle overhead. Could extract to `:score-engine` and `:leaderboard` libraries. |
 
 ## Code Review Simulation
 
@@ -133,7 +141,7 @@ Assume a mid-level dev wrote this system:
 
 1. **`LeaderboardModule.start()` called without guard** — Each `ViewModel` init could spawn duplicate collectors on the same cold Flow. **Fix:** Track `collectionJob` and return early if active.
 
-2. **Duplicate Hilt bindings** — `@Inject` constructors *and* manual `@Provides` in `AppModule` cause compile errors. **Fix:** Use constructor injection only.
+2. **Duplicate Hilt bindings** — `@Inject` constructors *and* manual `@Provides` in an `AppModule` cause compile errors. **Fix:** Use constructor injection only (current codebase has no manual `@Provides`).
 
 3. **Missing `android:name` on Application** — Hilt requires `@HiltAndroidApp` registered in the manifest. **Fix:** Add `LeaderboardApplication` to manifest.
 
@@ -177,7 +185,6 @@ Assume a mid-level dev wrote this system:
 
 ## What I'd Improve With More Time
 
-- Extract `:score-engine` and `:leaderboard-core` Gradle modules
 - WebSocket-backed `ScoreUpdate` source with Turbine integration tests
 - `MatchScope` Hilt component with proper cleanup
 - ktlint + detekt in CI
@@ -187,19 +194,23 @@ Assume a mid-level dev wrote this system:
 ## Project Structure
 
 ```
-app/src/main/java/com/example/leaderboard/
-├── data/
-│   ├── Player.kt
-│   ├── ScoreUpdate.kt
-│   └── ScoreGeneratorModule.kt      # Module 1
-├── domain/
-│   ├── RankedPlayer.kt
-│   ├── RankingEngine.kt             # Ranking logic
-│   └── LeaderboardModule.kt         # Module 2
-├── presentation/
-│   ├── LeaderboardViewModel.kt
-│   └── LeaderboardScreen.kt
-├── ui/theme/
-├── MainActivity.kt
-└── LeaderboardApplication.kt
+leaderboard/
+├── score-engine/          # Module 1 — JVM library, no Android deps
+│   └── src/main/kotlin/com/example/leaderboard/data/
+│       ├── Player.kt
+│       ├── ScoreUpdate.kt
+│       └── ScoreGeneratorModule.kt
+├── leaderboard-core/      # Module 2 — JVM library, consumes score-engine
+│   └── src/main/kotlin/com/example/leaderboard/domain/
+│       ├── RankedPlayer.kt
+│       ├── RankingEngine.kt
+│       └── LeaderboardModule.kt
+└── app/                   # Android UI + Hilt
+    └── src/main/java/com/example/leaderboard/
+        ├── presentation/
+        │   ├── LeaderboardViewModel.kt
+        │   └── LeaderboardScreen.kt
+        ├── ui/theme/
+        ├── MainActivity.kt
+        └── LeaderboardApplication.kt
 ```

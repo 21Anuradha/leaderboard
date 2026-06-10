@@ -23,4 +23,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "leaderboard"
-include(":app")
+include(":app", ":score-engine", ":leaderboard-core")

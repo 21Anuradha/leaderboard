@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.leaderboard.data.ScoreGeneratorModuleTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-06-10T18:51:24.211Z" hostname="DESKTOP-JKIIMJ6" time="2.093">
+  <properties/>
+  <testcase name="scoreUpdates is deterministic for the same session seed" classname="com.example.leaderboard.data.ScoreGeneratorModuleTest" time="2.027"/>
+  <testcase name="getInitialPlayers returns stable roster" classname="com.example.leaderboard.data.ScoreGeneratorModuleTest" time="0.002"/>
+  <testcase name="scoreUpdates only emits positive deltas" classname="com.example.leaderboard.data.ScoreGeneratorModuleTest" time="0.035"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
